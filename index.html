@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#4f46e5">
+<title>یادداشت هوشمند PWA</title>
+<!-- معرفی فایل manifest -->
+<link rel="manifest" href="manifest.json">
+<!-- آیکون برای iOS و دسکتاپ -->
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{--bg:#f8fafc;--card:#fff;--text:#0f172a;--muted:#64748b;--accent:#4f46e5;--danger:#dc2626;--border:#e2e8f0}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Tahoma,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px;line-height:1.6}
+  .container{max-width:600px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:16px}
+  h1{font-size:1.3rem;margin:0 0 10px}
+  textarea,input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:1rem;margin-bottom:10px}
+  button{padding:10px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-family:inherit;font-size:1rem;cursor:pointer}
+  button:hover{background:#4338ca}
+  button.danger{background:var(--danger)}
+  .item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .item-text{word-break:break-word;}
+  
+  /* استایل نوار اعلان به‌روزرسانی */
+  #update-toast {
+    position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: white; padding: 12px 20px; border-radius: 50px;
+    display: flex; align-items: center; gap: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    transition: bottom 0.4s ease; z-index: 1000; font-size: 0.9rem;
+  }
+  #update-toast.show { bottom: 20px; }
+  #update-toast button { padding: 6px 12px; font-size: 0.85rem; border-radius: 20px; }
+  #update-toast button.close { background: transparent; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h1>📝 یادداشت‌های من</h1>
+    <input type="text" id="title" placeholder="عنوان...">
+    <textarea id="body" placeholder="متن یادداشت..."></textarea>
+    <button onclick="addNote()">ذخیره</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<!-- نوار اعلان به‌روزرسانی -->
+<div id="update-toast">
+  <span>نسخه جدید آماده است!</span>
+  <button onclick="updateApp()">به‌روزرسانی</button>
+  <button class="close" onclick="dismissUpdate()">✕</button>
+</div>
+
+<script>
+  // --- ثبت Service Worker ---
+  let newWorker;
+  let refreshing = false;
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+          newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            // اگر نسخه جدید نصب شد و از قبل SW داشتیم
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              document.getElementById('update-toast').classList.add('show');
+            }
+          });
+        });
+      }).catch(err => console.log('SW registration failed:', err));
+    });
+
+    // وقتی کاربر روی به‌روزرسانی کلیک کرد و SW عوض شد، صفحه رفرش شود
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) { refreshing = true; window.location.reload(); }
+    });
+  }
+
+  // دکمه‌های نوار اعلان
+  function updateApp() {
+    if (newWorker) {
+      newWorker.postMessage({ action: 'skipWaiting' });
+    }
+  }
+  function dismissUpdate() {
+    document.getElementById('update-toast').classList.remove('show');
+  }
+
+  // --- منطق ساده یادداشت‌ها ---
+  let notes = JSON.parse(localStorage.getItem('notes_v1') || '[]');
+  
+  function render() {
+    const list = document.getElementById('list');
+    list.innerHTML = '';
+    notes.forEach((n, i) => {
+      const div = document.createElement('div');
+      div.className = 'item';
+      div.innerHTML = `<div class="item-text"><strong>${n.title || 'بدون عنوان'}</strong><br>${n.body}</div>
+                       <button class="danger" onclick="deleteNote(${i})">حذف</button>`;
+      list.appendChild(div);
+    });
+  }
+
+  function addNote() {
+    const title = document.getElementById('title').value;
+    const body = document.getElementById('body').value;
+    if(!title && !body) return;
+    notes.unshift({ title, body });
+    localStorage.setItem('notes_v1', JSON.stringify(notes));
+    document.getElementById('title').value = '';
+    document.getElementById('body').value = '';
+    render();
+  }
+
+  function deleteNote(index) {
+    notes.splice(index, 1);
+    localStorage.setItem('notes_v1', JSON.stringify(notes));
+    render();
+  }
+
+  render();
+</script>
+</body>
+  </html>
